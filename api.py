@@ -6,6 +6,10 @@ from typing import List, Optional
 from datetime import datetime, timezone
 import hashlib
 import hmac
+import os
+from dotenv import load_dotenv
+
+load_dotenv()  # loads .env into os.environ
 
 app = FastAPI(
     title="RFID Payment API",
@@ -20,11 +24,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DB_PATH = "./Database.db"
-
-FRAUD_VELOCITY_LIMIT = 5        # max transactions per minute per RFID
-FRAUD_AMOUNT_THRESHOLD = 2000   # single transaction amount considered suspicious
-
+DB_PATH = os.getenv("DB_PATH", "./Database.db")
+FRAUD_VELOCITY_LIMIT = int(os.getenv("FRAUD_VELOCITY_LIMIT", "5"))
+FRAUD_AMOUNT_THRESHOLD = int(os.getenv("FRAUD_AMOUNT_THRESHOLD", "2000"))
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin")
 
 # ---------- DB Helper ----------
 
@@ -149,7 +153,7 @@ def authenticate_customer(request: UserAuthRequest):
 
 @app.post("/authenticate/admin")
 def authenticate_admin(request: AdminAuthRequest):
-    if request.username == "admin" and request.password == "admin":
+    if request.username == ADMIN_USERNAME and request.password == ADMIN_PASSWORD:
         return {"status": "success", "message": "Admin login successful"}
     raise HTTPException(status_code=401, detail="Invalid admin credentials")
 

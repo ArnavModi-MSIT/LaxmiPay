@@ -1,3 +1,4 @@
 .venv
 .Database.db 
 __pycache__/
+.env
