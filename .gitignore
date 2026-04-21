@@ -1,4 +1,41 @@
-.venv
-.Database.db 
+# Python
 __pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+venv/
+.venv/
+env/
 .env
+
+# Database — never commit live data
+Database.db
+Database.db-shm
+Database.db-wal
+*.db
+*.sqlite
+*.sqlite3
+
+# QR code output
+qr_codes/
+*.png
+
+# Streamlit
+.streamlit/secrets.toml
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+Thumbs.db
+
+# Logs
+*.log
+logs/
