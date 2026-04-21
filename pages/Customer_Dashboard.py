@@ -1,140 +1,412 @@
 import streamlit as st
 import requests
-import cv2
-import numpy as np
 import pandas as pd
-from pyzbar.pyzbar import decode
+from datetime import date
+from cryptography.fernet import Fernet
 
 API_URL = "http://localhost:8000"
 
-st.set_page_config(page_title="Customer Dashboard", page_icon="📷", layout="centered")
+# Encryption key (must match qr.py)
+ENCRYPTION_KEY = b"z1cXRBEAIY301GjtQOzr2xx1iygts7K_QSAeuQTtJ3o="
+cipher = Fernet(ENCRYPTION_KEY)
+
+st.set_page_config(page_title="LaxmiPay", page_icon="💳", layout="centered")
 
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
-    html, body, [class*="css"] { font-family: 'IBM Plex Sans', sans-serif; }
-    .stApp { background: #0f0f13; color: #e8e8e8; }
-    .rfid-badge {
-        display: inline-block;
-        background: #0a2e1f; color: #00e5a0;
-        border: 1px solid #00e5a0; border-radius: 8px;
-        padding: 6px 16px; font-family: 'IBM Plex Mono', monospace;
-        font-size: 1.1rem; margin-bottom: 1rem;
-    }
-    .txn-row {
-        background: #181820; border: 1px solid #2a2a35;
-        border-radius: 8px; padding: 0.6rem 1rem;
-        margin-bottom: 0.5rem; display: flex;
-        justify-content: space-between; align-items: center;
-    }
-    .flagged-row { border-color: #ff5c5c !important; background: #1a0d0d !important; }
-    .stButton > button {
-        border-radius: 8px; font-family: 'IBM Plex Mono', monospace;
-        background: #00e5a0; color: #0f0f13;
-        font-weight: 600; border: none;
-    }
-    div[data-testid="metric-container"] {
-        background: #181820; border: 1px solid #2a2a35;
-        border-radius: 12px; padding: 0.8rem;
-    }
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
+html, body, [class*="css"] { font-family: 'IBM Plex Sans', sans-serif; }
+.stApp { background: #0f0f13; color: #e8e8e8; }
+
+.balance-card {
+    background: linear-gradient(135deg, #0a2e1f 0%, #0d1a14 100%);
+    border: 1px solid #00e5a0; border-radius: 16px;
+    padding: 2rem; text-align: center; margin-bottom: 1.5rem;
+}
+.balance-amount {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 3rem; font-weight: 600; color: #00e5a0;
+}
+.balance-label { font-size: 0.78rem; color: #888; letter-spacing: 2px; text-transform: uppercase; }
+.rfid-tag { font-family: 'IBM Plex Mono', monospace; font-size: 0.85rem; color: #555; margin-top: 0.4rem; }
+
+.blocked-card {
+    background: #2e0a0a; border: 1px solid #ff5c5c;
+    border-radius: 16px; padding: 1.5rem; text-align: center;
+    color: #ff5c5c; margin-bottom: 1.5rem;
+}
+.scan-hint {
+    background: #0d1a14; border: 1px dashed #00e5a0;
+    border-radius: 12px; padding: 1rem 1.2rem;
+    color: #00e5a0; font-size: 0.85rem;
+    font-family: 'IBM Plex Mono', monospace;
+    margin-bottom: 1rem; text-align: center;
+}
+.rfid-badge {
+    display: inline-block;
+    background: #0a2e1f; border: 1px solid #00e5a0;
+    border-radius: 8px; padding: 0.4rem 1rem;
+    font-family: 'IBM Plex Mono', monospace;
+    color: #00e5a0; font-size: 1rem;
+    margin: 0.5rem 0 1rem 0;
+}
+.stButton > button {
+    width: 100%; border-radius: 8px; background: #00e5a0;
+    color: #0f0f13; font-weight: 600; font-family: 'IBM Plex Mono', monospace;
+    border: none; padding: 0.6rem; transition: opacity 0.2s;
+}
+.stButton > button:hover { opacity: 0.85; }
+.stTextInput input {
+    background: #1a1a24 !important; border: 1px solid #2a2a35 !important;
+    color: #e8e8e8 !important; border-radius: 8px !important;
+}
+.stNumberInput input {
+    background: #1a1a24 !important; border: 1px solid #2a2a35 !important;
+    color: #e8e8e8 !important; border-radius: 8px !important;
+}
+div[data-testid="metric-container"] {
+    background: #181820; border: 1px solid #2a2a35;
+    border-radius: 12px; padding: 0.8rem;
+}
+[data-testid="stSidebar"] { background: #0d0d11 !important; border-right: 1px solid #1e1e28; }
+
+/* Style the camera widget */
+[data-testid="stCameraInput"] label { color: #888 !important; }
+[data-testid="stCameraInput"] button {
+    background: #00e5a0 !important; color: #0f0f13 !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+    border-radius: 8px !important; font-weight: 600 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("# 📷 Customer Portal")
-st.markdown("Scan your RFID QR code to access your account.")
-st.markdown("---")
 
-if st.button("← Back to Home"):
-    st.switch_page("app.py")
+# ─────────────────────────────────────────────
+# Helper functions
+# ─────────────────────────────────────────────
 
-st.subheader("Scan QR Code")
-img = st.camera_input("Point camera at your RFID QR code")
+def api_get(path, token):
+    try:
+        r = requests.get(f"{API_URL}{path}", headers={"Authorization": f"Bearer {token}"}, timeout=10)
+        r.raise_for_status()
+        return r.json()
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code in (401, 403):
+            st.session_state.pop("customer_token", None)
+            st.session_state.pop("customer_rfid", None)
+            st.error("Session expired. Please log in again.")
+            st.rerun()
+        st.error(f"API error: {e}")
+        return None
+    except Exception as e:
+        st.error(f"Connection error: {e}")
+        return None
 
-if img:
-    file_bytes = img.getvalue()
-    nparr = np.frombuffer(file_bytes, np.uint8)
-    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    decoded = decode(frame)
 
-    if not decoded:
-        st.warning("⚠️ No QR code detected. Please try again with better lighting.")
-    else:
-        rfid = decoded[0].data.decode("utf-8").strip()
+def api_post(path, token, json_body):
+    try:
+        r = requests.post(f"{API_URL}{path}", headers={"Authorization": f"Bearer {token}"}, json=json_body, timeout=10)
+        r.raise_for_status()
+        return r.json()
+    except requests.exceptions.HTTPError as e:
+        detail = e.response.json().get("detail", str(e)) if e.response else str(e)
+        st.error(f"Error: {detail}")
+        return None
+    except Exception as e:
+        st.error(f"Connection error: {e}")
+        return None
 
-        st.markdown(f'<div class="rfid-badge">✅ RFID: {rfid}</div>', unsafe_allow_html=True)
-        st.markdown("---")
 
-        try:
-            res = requests.get(f"{API_URL}/rfid/{rfid}", timeout=5)
+def decrypt_qr_data(encrypted_data: str) -> str:
+    """Decrypt encrypted QR code data. Returns decrypted string or None on failure."""
+    try:
+        decrypted = cipher.decrypt(encrypted_data.encode())
+        return decrypted.decode('utf-8')
+    except Exception:
+        return None
 
-            if res.status_code == 200:
-                data = res.json()
 
-                # Account Info
-                st.subheader("💳 Account Summary")
-                c1, c2 = st.columns(2)
-                c1.metric("RFID", rfid)
-                c2.metric("Balance", f"₹{data['balance']}")
-                st.caption(f"Linked ESP: `{data['esp_id'] or 'Not assigned'}`")
+def decode_qr_from_image(img_bytes):
+    """
+    Decode a QR code from raw image bytes.
+    Tries pyzbar first, then falls back to OpenCV.
+    Returns the decoded string or None.
+    """
+    from PIL import Image
+    import io as _io
+    img = Image.open(_io.BytesIO(img_bytes)).convert("RGB")
 
-                st.markdown("---")
+    # ── Attempt 1: pyzbar (fastest, most reliable) ──────────────────────────
+    try:
+        from pyzbar.pyzbar import decode as pyzbar_decode
+        results = pyzbar_decode(img)
+        if results:
+            return results[0].data.decode("utf-8").strip()
+    except ImportError:
+        pass  # pyzbar not installed, try opencv
 
-                # Transactions
-                st.subheader("📜 Transaction History")
-                try:
-                    tr = requests.get(f"{API_URL}/transactions/{rfid}?limit=50", timeout=5)
-                    if tr.status_code == 200:
-                        txns = tr.json()
+    # ── Attempt 2: OpenCV QRCodeDetector ─────────────────────────────────────
+    try:
+        import cv2
+        import numpy as np
+        cv_img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+        detector = cv2.QRCodeDetector()
+        value, _, _ = detector.detectAndDecode(cv_img)
+        if value:
+            return value.strip()
+    except ImportError:
+        pass
 
-                        # Spend chart
-                        df = pd.DataFrame(txns)
-                        purchases = df[df["esp_id"] != "TOPUP"].copy() if not df.empty else pd.DataFrame()
-                        if not purchases.empty and "timestamp" in purchases.columns:
-                            purchases["timestamp"] = pd.to_datetime(purchases["timestamp"])
-                            purchases = purchases.sort_values("timestamp")
-                            st.area_chart(
-                                purchases.set_index("timestamp")[["amount"]],
-                                color="#00e5a0",
-                            )
+    return None
 
-                        # Transaction list
-                        for t in txns[:20]:
-                            is_topup = t["esp_id"] == "TOPUP"
-                            is_flagged = t.get("flagged", False)
-                            icon = "⬆️" if is_topup else ("🚨" if is_flagged else "🔹")
-                            amt_color = "#00e5a0" if is_topup else ("#ff5c5c" if is_flagged else "#e8e8e8")
-                            sign = "+" if is_topup else "-"
-                            ts = t.get("timestamp", "")[:16].replace("T", " ") if t.get("timestamp") else ""
-                            row_class = "flagged-row" if is_flagged else ""
-                            label = "Top-up" if is_topup else f"ESP: {t['esp_id']}"
 
-                            st.markdown(f"""
-                            <div class="txn-row {row_class}">
-                                <span>{icon} {label}</span>
-                                <span style="color:#888;font-size:0.8rem">{ts}</span>
-                                <span style="color:{amt_color};font-family:'IBM Plex Mono',monospace;font-weight:600">
-                                    {sign}₹{t['amount']}
-                                </span>
-                            </div>
-                            """, unsafe_allow_html=True)
+def do_login(rfid: str, password: str) -> bool:
+    """Call the API, store token+rfid on success. Returns True on success."""
+    try:
+        res = requests.post(
+            f"{API_URL}/authenticate/customer",
+            json={"rfid": rfid, "password": password},
+            timeout=5,
+        )
+        if res.status_code == 200:
+            st.session_state["customer_token"] = res.json()["token"]
+            st.session_state["customer_rfid"] = rfid
+            return True
+        return False
+    except requests.exceptions.ConnectionError:
+        st.error("⚠️ Cannot connect to API. Make sure `uvicorn api:app --reload` is running.")
+        return False
 
-                        if len(txns) == 0:
-                            st.info("No transactions yet.")
-                        else:
-                            st.caption(f"Showing latest {min(20, len(txns))} of {len(txns)} transactions")
 
-                    elif tr.status_code == 404:
-                        st.info("No transactions found.")
-                    else:
-                        st.error("Could not load transactions.")
+# ─────────────────────────────────────────────
+# LOGIN SCREEN
+# ─────────────────────────────────────────────
 
-                except requests.exceptions.ConnectionError:
-                    st.error("⚠️ API connection error.")
+if not st.session_state.get("customer_token"):
 
-            elif res.status_code == 404:
-                st.error("❌ RFID not registered. Please contact support.")
+    st.markdown("## 💳 LaxmiPay — Customer Portal")
+    st.markdown("---")
+
+    tab_manual, tab_qr = st.tabs(["🔑 Password Login", "📷 Scan QR Code"])
+
+    # ── Manual login ──────────────────────────────────────────────────────────
+    with tab_manual:
+        st.markdown("")
+        rfid_manual = st.text_input("RFID Number", key="manual_rfid")
+        password_manual = st.text_input("Password", type="password", key="manual_pass")
+
+        if st.button("Login", key="manual_login_btn"):
+            if not rfid_manual or not password_manual:
+                st.warning("Enter both RFID and password.")
+            elif do_login(rfid_manual.strip(), password_manual):
+                st.success("✅ Login successful!")
+                st.rerun()
             else:
-                st.error("⚠️ Something went wrong. Try again.")
+                st.error("❌ Invalid RFID or password.")
 
-        except requests.exceptions.ConnectionError:
-            st.error("⚠️ Cannot connect to API server.")
+        st.markdown("---")
+        st.caption("Demo: use any RFID from sm.py output with password `pass{RFID}`, or scan QR code for instant login")
+
+    # ── QR scan login ─────────────────────────────────────────────────────────
+    with tab_qr:
+        st.markdown("")
+
+        # If we already decoded an RFID from the camera, skip straight to password entry
+        if st.session_state.get("qr_scanned_rfid"):
+            scanned = st.session_state["qr_scanned_rfid"]
+            st.success(f"✅ QR code detected!")
+            st.markdown(f'<div class="rfid-badge">RFID: {scanned}</div>', unsafe_allow_html=True)
+
+            password_qr = st.text_input("Enter your password to confirm", type="password", key="qr_pass")
+
+            col_login, col_rescan = st.columns(2)
+            with col_login:
+                if st.button("🔓 Login", key="qr_login_btn"):
+                    if not password_qr:
+                        st.warning("Enter your password.")
+                    elif do_login(scanned, password_qr):
+                        st.session_state.pop("qr_scanned_rfid", None)
+                        st.success("✅ Login successful!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Incorrect password.")
+            with col_rescan:
+                if st.button("🔄 Scan Again", key="qr_rescan_btn"):
+                    st.session_state.pop("qr_scanned_rfid", None)
+                    st.rerun()
+
+        else:
+            st.markdown(
+                '<div class="scan-hint">📱 Hold your RFID QR code in front of the camera,<br>'
+                'and login instantly without password!</div>',
+                unsafe_allow_html=True,
+            )
+
+            img_file = st.camera_input(
+                "Point your camera at the QR code",
+                key="qr_camera",
+                label_visibility="collapsed",
+            )
+
+            if img_file is not None:
+                raw_bytes = img_file.getvalue()
+                with st.spinner("Decoding QR code…"):
+                    result = decode_qr_from_image(raw_bytes)
+
+                if result:
+                    # Try to decrypt
+                    decrypted = decrypt_qr_data(result)
+                    
+                    if decrypted and ":" in decrypted:
+                        # Successfully decrypted and contains rfid:password
+                        rfid, password = decrypted.split(":", 1)
+                        rfid = rfid.strip()
+                        password = password.strip()
+                        if do_login(rfid, password):
+                            st.success("✅ Login successful via QR code!")
+                            st.rerun()
+                        else:
+                            st.error("❌ Invalid QR code or credentials.")
+                    elif ":" in result:
+                        # Not encrypted, but contains rfid:password (legacy)
+                        rfid, password = result.split(":", 1)
+                        rfid = rfid.strip()
+                        password = password.strip()
+                        if do_login(rfid, password):
+                            st.success("✅ Login successful via QR code!")
+                            st.rerun()
+                        else:
+                            st.error("❌ Invalid QR code or credentials.")
+                    else:
+                        # Just RFID, ask for password (legacy)
+                        st.session_state["qr_scanned_rfid"] = result
+                        st.rerun()
+                else:
+                    st.error(
+                        "⚠️ No QR code detected. Make sure the code is in focus and well-lit, then try again."
+                    )
+                    st.caption(
+                        "If this keeps failing, install pyzbar for better detection: "
+                        "`pip install pyzbar`"
+                    )
+
+        st.markdown("---")
+        st.caption("QR codes are generated by `qr.py`. Run `python qr.py --batch` to generate all.")
+
+    st.stop()
+
+
+# ─────────────────────────────────────────────
+# AUTHENTICATED DASHBOARD
+# ─────────────────────────────────────────────
+
+token = st.session_state["customer_token"]
+rfid  = st.session_state["customer_rfid"]
+
+with st.sidebar:
+    st.markdown(f"**RFID:** `{rfid}`")
+    if st.button("🚪 Logout"):
+        st.session_state.pop("customer_token", None)
+        st.session_state.pop("customer_rfid", None)
+        st.session_state.pop("qr_scanned_rfid", None)
+        st.rerun()
+
+card = api_get(f"/rfid/{rfid}", token)
+if not card:
+    st.stop()
+
+if card.get("status") == "blocked":
+    st.markdown("""<div class="blocked-card">
+        <b style="font-size:1.2rem">🔴 Card Blocked</b><br>
+        <span style="font-size:0.9rem">Your card has been blocked. Please contact the administrator.</span>
+    </div>""", unsafe_allow_html=True)
+else:
+    st.markdown(f"""
+    <div class="balance-card">
+        <div class="balance-label">Available Balance</div>
+        <div class="balance-amount">₹{card['balance']:,}</div>
+        <div class="rfid-tag">RFID: {rfid}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+txns_data = api_get(f"/transactions/{rfid}?limit=500", token)
+txns = txns_data if txns_data else []
+
+today_str = date.today().isoformat()
+today_spent = sum(
+    t["amount"] for t in txns
+    if t.get("transaction_type") == "debit" and t.get("timestamp", "").startswith(today_str)
+)
+
+daily_limit = card.get("daily_limit") or 0
+
+st.subheader("📅 Today's Spending")
+if daily_limit > 0:
+    progress  = min(today_spent / daily_limit, 1.0)
+    remaining = max(daily_limit - today_spent, 0)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Spent today", f"₹{today_spent:,}")
+    c2.metric("Daily limit", f"₹{daily_limit:,}")
+    c3.metric("Remaining",   f"₹{remaining:,}")
+    st.progress(progress, text=f"{progress*100:.0f}% of daily limit used")
+else:
+    st.metric("Spent today", f"₹{today_spent:,}")
+    st.caption("No daily limit on this card.")
+
+
+if card.get("status") != "blocked":
+    st.markdown("---")
+    st.subheader("⚡ Make a Payment")
+
+    merchants = ["Main Canteen", "North Block Cafe", "Library Kiosk",
+                 "Sports Canteen", "Vending Machine", "East Wing Cafe", "Bookstore"]
+    col1, col2 = st.columns(2)
+    with col1:
+        merchant = st.selectbox("Merchant", merchants)
+    with col2:
+        amount = st.number_input(
+            "Amount (₹)", min_value=1, max_value=card["balance"],
+            value=min(100, card["balance"]), step=10,
+        )
+
+    if st.button("💳 Pay Now"):
+        res = api_post("/pay", token, {"rfid": rfid, "amount": amount, "merchant_name": merchant})
+        if res:
+            if res.get("flagged"):
+                st.warning(f"⚠️ Payment processed but flagged: {res['fraud_reason']}")
+            else:
+                st.success(f"✅ ₹{amount:,} paid to {merchant}")
+            st.metric("New Balance", f"₹{res['new_balance']:,}")
+            st.rerun()
+
+
+st.markdown("---")
+st.subheader("📜 Transaction History")
+
+if not txns:
+    st.info("No transactions found.")
+else:
+    df = pd.DataFrame(txns)
+
+    f1, f2 = st.columns(2)
+    with f1:
+        type_filter = st.selectbox("Filter by type", ["All", "debit", "topup"])
+    with f2:
+        flag_filter = st.checkbox("Show only flagged")
+
+    if type_filter != "All":
+        df = df[df["transaction_type"] == type_filter]
+    if flag_filter:
+        df = df[df["flagged"] == True]
+
+    if df.empty:
+        st.info("No transactions match the filter.")
+    else:
+        df["flagged_display"]  = df["flagged"].apply(lambda x: "🚨" if x else "")
+        df["amount_display"]   = df.apply(
+            lambda r: f"{'−' if r['transaction_type'] == 'debit' else '+'} ₹{r['amount']:,}", axis=1
+        )
+        show = df[["timestamp", "transaction_type", "merchant_name", "amount_display", "flagged_display"]].copy()
+        show.columns = ["Date & Time", "Type", "Merchant", "Amount", "⚑"]
+        st.dataframe(show, use_container_width=True, hide_index=True)
+        st.caption(f"Showing {len(df)} transactions")

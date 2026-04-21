@@ -12,9 +12,18 @@ import sys
 import os
 import argparse
 import sqlite3
+from cryptography.fernet import Fernet
 
 
 DB_PATH = "./Database.db"
+ENCRYPTION_KEY = b"z1cXRBEAIY301GjtQOzr2xx1iygts7K_QSAeuQTtJ3o="
+cipher = Fernet(ENCRYPTION_KEY)
+
+
+def encrypt_data(data: str) -> str:
+    """Encrypt data and return as string."""
+    encrypted = cipher.encrypt(data.encode())
+    return encrypted.decode('utf-8')
 
 
 def generate_qr(data: str, filename: str = "qr_code.png") -> str:
@@ -45,10 +54,12 @@ def batch_generate(out_dir: str = "./qr_codes"):
         return
 
     for (rfid,) in rows:
+        data = f"{rfid}:pass{rfid}"
+        encrypted = encrypt_data(data)
         path = os.path.join(out_dir, f"rfid_{rfid}.png")
-        generate_qr(str(rfid), path)
+        generate_qr(encrypted, path)
 
-    print(f"✅ Generated {len(rows)} QR codes → {out_dir}/")
+    print(f"✅ Generated {len(rows)} encrypted QR codes → {out_dir}/")
 
 
 if __name__ == "__main__":
@@ -61,7 +72,9 @@ if __name__ == "__main__":
     if args.batch:
         batch_generate(args.out)
     elif args.rfid:
-        path = generate_qr(args.rfid, f"rfid_{args.rfid}.png")
+        data = f"{args.rfid}:pass{args.rfid}"
+        encrypted = encrypt_data(data)
+        path = generate_qr(encrypted, f"rfid_{args.rfid}.png")
         print(f"✅ QR code saved: {path}")
     else:
         parser.print_help()

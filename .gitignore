@@ -21,10 +21,6 @@ Database.db-wal
 *.sqlite
 *.sqlite3
 
-# QR code output
-qr_codes/
-*.png
-
 # Streamlit
 .streamlit/secrets.toml
 

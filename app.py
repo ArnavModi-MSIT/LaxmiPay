@@ -1,8 +1,7 @@
-import os
 import streamlit as st
 import requests
 
-API_URL = os.environ.get("API_URL", "http://localhost:8000")
+API_URL = "http://localhost:8000"
 
 st.set_page_config(
     page_title="LaxmiPay",
@@ -20,15 +19,15 @@ html, body, [class*="css"] { font-family: 'IBM Plex Sans', sans-serif; }
 
 .hero-title {
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 2.4rem; font-weight: 600;
+    font-size: 2.6rem; font-weight: 600;
     color: #00e5a0; letter-spacing: -1px; margin-bottom: 0;
 }
 .hero-sub {
-    font-size: 0.9rem; color: #888;
-    letter-spacing: 2px; text-transform: uppercase; margin-top: 4px;
+    font-size: 0.85rem; color: #666;
+    letter-spacing: 3px; text-transform: uppercase; margin-top: 6px;
 }
 .status-pill {
-    display: inline-block; padding: 3px 12px;
+    display: inline-block; padding: 3px 14px;
     border-radius: 999px; font-size: 0.78rem;
     font-family: 'IBM Plex Mono', monospace; margin-bottom: 1rem;
 }
@@ -52,10 +51,6 @@ html, body, [class*="css"] { font-family: 'IBM Plex Sans', sans-serif; }
 [data-testid="stSidebar"] {
     background: #0d0d11 !important; border-right: 1px solid #1e1e28;
 }
-.sidebar-title {
-    font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem;
-    color: #555; letter-spacing: 3px; text-transform: uppercase; padding: 0.5rem 0;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -70,22 +65,19 @@ def check_api():
 
 api_online = check_api()
 status_class = "status-online" if api_online else "status-offline"
-status_text  = "● API ONLINE" if api_online else "● API OFFLINE"
+status_text = "● API ONLINE" if api_online else "● API OFFLINE"
 
 st.markdown('<div class="hero-title">LaxmiPay</div>', unsafe_allow_html=True)
-st.markdown('<div class="hero-sub">Contactless Payment Management System</div>', unsafe_allow_html=True)
+st.markdown('<div class="hero-sub">RFID Payment Management System</div>', unsafe_allow_html=True)
 st.markdown(f'<span class="status-pill {status_class}">{status_text}</span>', unsafe_allow_html=True)
 st.markdown("---")
 
 with st.sidebar:
-    st.markdown('<div class="sidebar-title">Navigation</div>', unsafe_allow_html=True)
-    page = st.radio("", ["🏠 Home", "👤 Customer", "🛠️ Admin"], label_visibility="collapsed")
+    st.markdown("**Navigation**")
+    page = st.radio("", ["🏠 Home", "👤 Customer Portal", "🛠️ Admin Panel"], label_visibility="collapsed")
     st.markdown("---")
-    st.markdown('<div class="sidebar-title">System</div>', unsafe_allow_html=True)
     st.markdown(f"**API:** `{API_URL}`")
-    st.markdown("**Version:** `3.0.0`")
-    st.markdown("**Fraud Detection:** ✅ Active")
-
+    st.markdown("**Version:** `4.0.0`")
     if st.session_state.get("admin_token"):
         st.markdown("---")
         st.success("🔐 Admin logged in")
@@ -93,66 +85,66 @@ with st.sidebar:
             st.session_state.pop("admin_token", None)
             st.rerun()
 
+
 if page == "🏠 Home":
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("""<div class="info-card"><b>📡 IoT + Web Integration</b><br>
-        <span style="color:#888;font-size:0.85rem">ESP8266 RFID readers push payment events to the FastAPI backend in real-time.</span></div>""",
+        st.markdown("""<div class="info-card"><b>💳 RFID Card Management</b><br>
+        <span style="color:#888;font-size:0.85rem">Register cards, top up balances, set daily spending limits, block or unblock cards instantly.</span></div>""",
         unsafe_allow_html=True)
         st.markdown("""<div class="info-card"><b>🔐 Fraud Detection</b><br>
-        <span style="color:#888;font-size:0.85rem">Velocity-based and threshold-based heuristics flag suspicious transactions automatically.</span></div>""",
+        <span style="color:#888;font-size:0.85rem">Velocity-based and high-value threshold checks automatically flag suspicious transactions.</span></div>""",
         unsafe_allow_html=True)
     with col2:
         st.markdown("""<div class="info-card"><b>📊 Real-time Analytics</b><br>
-        <span style="color:#888;font-size:0.85rem">Admin dashboard tracks daily volume, top spenders, and flagged transactions.</span></div>""",
+        <span style="color:#888;font-size:0.85rem">Daily volume charts, top spenders, flagged transaction overview, and full audit trail.</span></div>""",
         unsafe_allow_html=True)
-        st.markdown("""<div class="info-card"><b>🛡️ Card Management</b><br>
-        <span style="color:#888;font-size:0.85rem">Block/unblock cards instantly. Set per-card daily spending limits. Export history as CSV.</span></div>""",
+        st.markdown("""<div class="info-card"><b>💸 Simulate Payments</b><br>
+        <span style="color:#888;font-size:0.85rem">Process payments directly from the dashboard to demo the full payment lifecycle.</span></div>""",
         unsafe_allow_html=True)
 
     st.markdown("---")
     c1, c2 = st.columns(2)
     with c1:
-        if st.button("Open Customer Dashboard"):
+        if st.button("Open Customer Portal"):
             st.switch_page("pages/Customer_Dashboard.py")
     with c2:
-        if st.button("Admin Login →"):
-            st.rerun()
+        if st.button("Open Admin Panel"):
+            st.switch_page("pages/Admin_Dashboard.py")
 
-elif page == "👤 Customer":
-    st.subheader("👤 Customer Access")
-    st.info("Use the Customer Dashboard to view your balance, transaction history, and spending summary.")
-    if st.button("Open Customer Dashboard"):
+
+elif page == "👤 Customer Portal":
+    st.subheader("👤 Customer Portal")
+    st.info("View your balance, transaction history, and make payments.")
+    if st.button("Open Customer Portal"):
         st.switch_page("pages/Customer_Dashboard.py")
 
-elif page == "🛠️ Admin":
+
+elif page == "🛠️ Admin Panel":
     st.subheader("🛠️ Admin Login")
 
     if not api_online:
-        st.error("⚠️ API server is offline. Start the FastAPI server first.")
+        st.error("⚠️ API server is offline. Run: `uvicorn api:app --reload`")
         st.stop()
 
     if st.session_state.get("admin_token"):
-        st.success("You are already logged in.")
-        if st.button("Go to Admin Dashboard"):
+        st.success("Already logged in.")
+        if st.button("Go to Admin Panel"):
             st.switch_page("pages/Admin_Dashboard.py")
     else:
+        st.caption("Default credentials: `admin` / `admin123`")
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
 
         if st.button("Login"):
             if not username or not password:
-                st.warning("Please enter both username and password.")
+                st.warning("Enter both username and password.")
             else:
                 try:
-                    res = requests.post(
-                        f"{API_URL}/authenticate/admin",
-                        json={"username": username, "password": password},
-                        timeout=5,
-                    )
+                    res = requests.post(f"{API_URL}/authenticate/admin", json={"username": username, "password": password}, timeout=5)
                     if res.status_code == 200:
                         st.session_state["admin_token"] = res.json()["token"]
-                        st.success("✅ Login successful! Redirecting...")
+                        st.success("✅ Login successful!")
                         st.switch_page("pages/Admin_Dashboard.py")
                     else:
                         st.error("❌ Invalid credentials.")
